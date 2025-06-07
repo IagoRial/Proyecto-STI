@@ -9,8 +9,10 @@ class RedSimulada:
         
     #Abre 3 puertos aleatorios al principio de cada simulación
     def abrir_puertos_iniciales(self):
-        self.abrir_puertos(random.sample(range(1, self.total_puertos + 1), 3))
-
+        # Seleccionamos 3 puertos distintos entre 1 y total_puertos
+        puertos_iniciales = random.sample(range(1, self.total_puertos + 1), 3)
+        # Y los abrimos
+        self.abrir_puertos(puertos_iniciales)
     #Función que cierra todos los puertos
     def cerrar_todos(self):
         for puerto in self.puertos:

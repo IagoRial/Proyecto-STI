@@ -1,58 +1,64 @@
 from red_simulada import RedSimulada
 from ia_atacante import IAAttacker
 from ia_defensora import IADefensora
-from ia_defensora_evolutiva import IADefensoraEvolutiva  # Importamos la IA defensora evolutiva
+from evaluador import Evaluador
+import logging
 
-# Función para imprimir el resumen de cada ciclo de 15 turnos
-def print_resumen(turno, red, ia_atacante, ia_defensora_qlearning, ia_defensora_evolutiva):
-    # Estrategia y errores del atacante
-    estrategia_atk = ia_atacante.ultimo_estrategia_usada
-    errores_atk = ia_atacante.errores  # Mostramos los errores del atacante
+# Configuración del log
+logging.basicConfig(
+    filename='registro_simulacion.log',
+    level=logging.INFO,
+    format='%(message)s',
+    filemode='w'  # Reescribe el archivo cada vez que se ejecuta
+)
 
-    # Estrategia y rendimiento de la defensora Q-Learning
-    estrategia_def_qlearning = ia_defensora_qlearning.estrategia_actual
-    rendimiento_def_qlearning = ia_defensora_qlearning.rendimiento.get(estrategia_def_qlearning, 0)
+TURNOS_AUTO = 20  # 0 = manual, otro número, x turnos, automático (ej: 50)
 
-    # Estrategia y rendimiento de la defensora evolutiva
-    if ia_defensora_evolutiva.mejor_estrategia:
-        estrategia_def_evolutiva = ia_defensora_evolutiva.mejor_estrategia
-        rendimiento_def_evolutiva = ia_defensora_evolutiva.mejor_fitness
-    else:
-        estrategia_def_evolutiva = "Sin evolución aún"
-        rendimiento_def_evolutiva = "N/A"
+# Función que imprime el resumen del turno
+def print_turno_resumen(turno, red, ia_atacante, ia_defensora, delta_atk, delta_def):
+    estrategia_atk = max(ia_atacante.rendimiento, key=ia_atacante.rendimiento.get)
+    puntuacion_atk = ia_atacante.rendimiento[estrategia_atk]
 
-    # Mostrar los resultados del resumen solo después de cada ciclo de 15 turnos
-    print(f"\n--- Resumen después de {turno} turnos ---")
+    estrategia_def = max(ia_defensora.rendimiento, key=ia_defensora.rendimiento.get)
+    puntuacion_def = ia_defensora.rendimiento[estrategia_def]
+
+    print(f"\n--- Turno {turno} ---")
     print(f"[Red] Puertos abiertos: {sorted(red.puertos_abiertos)}")
-    print(f"[Atacante] Estrategia: {estrategia_atk} | Errores: {len(errores_atk)}")
-    print(f"[Defensora Q-Learning] Estrategia: {estrategia_def_qlearning} | Rendimiento: {rendimiento_def_qlearning:.2f}")
-    print(f"[Defensora Evolutiva] Estrategia: {estrategia_def_evolutiva} | Rendimiento: {rendimiento_def_evolutiva}")
+    print(f"[Atacante] Estrategia: {ia_atacante.ultimo_estrategia_usada} | Aciertos: {len(ia_atacante.aciertos)} | Errores: {len(ia_atacante.errores)}")
+    print(f"[Defensora] Estrategia: {ia_defensora.estrategia_actual}")
+    print(f"[Evaluación] Atacante {delta_atk:+.1f} | Defensora {delta_def:+.1f}")
+    print(f"[Rendimiento] Mejor estrategia atacante: {estrategia_atk} ({puntuacion_atk:.2f}) | Mejor defensora: {estrategia_def} ({puntuacion_def:.2f})")
 
-# Crear la red simulada y las instancias de las IA
+# Crear instancias
 red = RedSimulada(total_puertos=10)
 ia_atacante = IAAttacker(red)
-ia_defensora_qlearning = IADefensora(red)
-ia_defensora_evolutiva = IADefensoraEvolutiva(red)
+ia_defensora = IADefensora(red)
+evaluador = Evaluador(ia_atacante, ia_defensora)
 
-# Bucle principal del programa
+# Bucle de simulación
 turno = 1
 while True:
-    # La defensora Q-Learning reacciona al ataque
-    ia_defensora_qlearning.reaccionar_ataque()
+    ia_defensora.reaccionar_ataque()
+    evaluador.estrategia_defensora_anterior = ia_defensora.estrategia_actual
     ia_atacante.escanear()
-    ia_defensora_qlearning.evaluar_rendimiento(ia_atacante)
+    delta_atk, delta_def = evaluador.evaluar()
 
-    # La defensora Evolutiva evalúa su rendimiento y evoluciona cada ciclo
-    ia_defensora_evolutiva.evolucionar(ia_atacante)  # Aquí pasamos la instancia de IAAtacante
+    # Guardar datos en log
+    estrategia = ia_defensora.estrategia_actual
+    rendimiento = ia_defensora.rendimiento[estrategia] if estrategia else 0.0
+    logging.info(f"{turno},{len(ia_atacante.errores)},{rendimiento:.2f}")
 
-    # Si llegamos al ciclo de 15 turnos, mostramos el resumen
-    if turno % 15 == 0:
-        print_resumen(turno, red, ia_atacante, ia_defensora_qlearning, ia_defensora_evolutiva)
+    # Mostrar en pantalla
+    print_turno_resumen(turno, red, ia_atacante, ia_defensora, delta_atk, delta_def)
 
-    # Pedir confirmación en cada ciclo
-    continuar = input("\n¿Continuar con la siguiente iteración? (y/n): ")
-    if continuar.lower() != 'y':
-        print("Simulación finalizada.")
-        break
+    if TURNOS_AUTO > 0:
+        if turno >= TURNOS_AUTO:
+            print("\nSimulación automática finalizada.")
+            break
+    else:
+        continuar = input("\n¿Continuar con la siguiente iteración? (y/n): ")
+        if continuar.lower() != 'y':
+            print("Simulación finalizada.")
+            break
 
     turno += 1
